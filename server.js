@@ -8,7 +8,6 @@ import auth from "./Models/auth.js";
 import Student from "./Models/Student.js";
 import Counter from "./Models/Counter.js";
 import { v2 as cloudinary } from "cloudinary";
-import multer from "multer";
 
 cloudinary.config({
   cloud_name: "dew2xoivx",
@@ -32,10 +31,6 @@ mongoose
   .catch((err) => {
     console.log(err);
   });
-
-// Multer setup (memory storage)
-const storage = multer.memoryStorage();
-const upload = multer({ storage });
 
 // CR register route
 app.post("/cr/register", async (req, res) => {
@@ -84,12 +79,12 @@ async function getNextUserId() {
   return counter.seq.toString().padStart(3, "0");
 }
 
-// 🔹 Updated student register route with multer + Cloudinary
-app.post("/student/register", upload.single("image"), async (req, res) => {
+// 🔹 Updated student register route WITHOUT multer/Cloudinary
+app.post("/student/register", async (req, res) => {
   try {
-    const { name, phone, stdClass } = req.body;
+    const { name, phone, stdClass, imgUrl } = req.body;
 
-    if (!name || !phone || !stdClass || !req.file) {
+    if (!name || !phone || !stdClass || !imgUrl) {
       return res.json({ message: "all fields are required", success: false });
     }
 
@@ -98,29 +93,13 @@ app.post("/student/register", upload.single("image"), async (req, res) => {
       return res.json({ message: "user already exist", success: false });
     }
 
-    // Cloudinary upload
-    const streamUpload = (fileBuffer) => {
-      return new Promise((resolve, reject) => {
-        const stream = cloudinary.uploader.upload_stream(
-          { folder: "students" },
-          (error, result) => {
-            if (result) resolve(result);
-            else reject(error);
-          }
-        );
-        stream.end(fileBuffer);
-      });
-    };
-
-    const cloudRes = await streamUpload(req.file.buffer);
-
     const nextId = await getNextUserId();
     const newUser = new Student({
       userId: nextId,
       name,
       phone,
       stdClass,
-      imgUrl: cloudRes.secure_url,
+      imgUrl,
     });
 
     await newUser.save();
