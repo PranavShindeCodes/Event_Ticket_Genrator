@@ -7,6 +7,15 @@ import jwt from "jsonwebtoken";
 import auth from "./Models/auth.js";
 import Student from "./Models/Student.js";
 import Counter from "./Models/Counter.js";
+import { v2 as cloudinary } from "cloudinary";
+import multer from "multer";
+
+cloudinary.config({
+  cloud_name: "dew2xoivx",
+  api_key: "859399762437558",
+  api_secret: "2SqV3j4SQbVv3tOdb1N74mYhv0Q",
+});
+
 const app = express();
 app.use(cors());
 app.use(express.json());
@@ -23,6 +32,12 @@ mongoose
   .catch((err) => {
     console.log(err);
   });
+
+// Multer setup (memory storage)
+const storage = multer.memoryStorage();
+const upload = multer({ storage });
+
+// CR register route
 app.post("/cr/register", async (req, res) => {
   const { name, email, password } = req.body;
   if (!name || !email || !password) {
@@ -40,6 +55,8 @@ app.post("/cr/register", async (req, res) => {
   });
   res.json({ message: "user created successfully", success: true, user });
 });
+
+// CR login route
 app.post("/cr/login", async (req, res) => {
   const { email, password } = req.body;
   if (!email || !password) {
@@ -57,44 +74,65 @@ app.post("/cr/login", async (req, res) => {
   res.json({ message: "login successfull", success: true, token });
 });
 
-//students register route /student/register
+// Counter function
 async function getNextUserId() {
   const counter = await Counter.findOneAndUpdate(
-    { id: "userID" }, // <-- query object
+    { id: "userID" },
     { $inc: { seq: 1 } },
     { new: true, upsert: true }
   );
   return counter.seq.toString().padStart(3, "0");
 }
 
-app.post("/student/register", auth, async (req, res) => {
+// 🔹 Updated student register route with multer + Cloudinary
+app.post("/student/register", upload.single("image"), async (req, res) => {
   try {
-    const { name, phone, stdClass, imgUrl } = req.body; // <-- use stdClass
-    if (!name || !phone || !stdClass || !imgUrl) {
+    const { name, phone, stdClass } = req.body;
+
+    if (!name || !phone || !stdClass || !req.file) {
       return res.json({ message: "all fields are required", success: false });
     }
+
     const exist = await Student.findOne({ phone });
     if (exist) {
       return res.json({ message: "user already exist", success: false });
     }
+
+    // Cloudinary upload
+    const streamUpload = (fileBuffer) => {
+      return new Promise((resolve, reject) => {
+        const stream = cloudinary.uploader.upload_stream(
+          { folder: "students" },
+          (error, result) => {
+            if (result) resolve(result);
+            else reject(error);
+          }
+        );
+        stream.end(fileBuffer);
+      });
+    };
+
+    const cloudRes = await streamUpload(req.file.buffer);
+
     const nextId = await getNextUserId();
     const newUser = new Student({
       userId: nextId,
       name,
       phone,
       stdClass,
-      imgUrl,
+      imgUrl: cloudRes.secure_url,
     });
+
     await newUser.save();
     res.json({ success: true, userId: newUser.userId, user: newUser });
-  } catch (error) {
-    console.log(error);
+  } catch (err) {
+    console.log(err);
     res.json({ success: false, message: "registration failed" });
   }
 });
 
-//get student by id
-app.get("/student/:id", auth, async (req, res) => {
+// Get student by ID
+app.get("/student/:id", async (req, res) => {
   const id = req.params.id;
   const user = await Student.findOne({ userId: id });
   if (!user) {
@@ -102,6 +140,7 @@ app.get("/student/:id", auth, async (req, res) => {
   }
   res.json({ message: "user found", success: true, user });
 });
+
 app.listen(port, () => {
   console.log(`server is running on port ${port}`);
 });
