@@ -30,7 +30,7 @@ const upload = multer({ storage });
 // ✅ MongoDB connection
 mongoose
   .connect(
-    "mongodb+srv://pranavshinde1509:YCqEypZ8ECjPyUPK@imrda.yswkvyo.mongodb.net/",
+    "mongodb+srv://pranavshinde1509:YCqEypZ8ECjPyUPK@cluster0event.1y7fy33.mongodb.net/",
     { dbName: "IMRDA" }
   )
   .then(() => console.log("Connected to MongoDB"))
