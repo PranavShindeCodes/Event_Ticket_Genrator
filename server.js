@@ -20,8 +20,8 @@ const port = 1000;
 
 // ✅ Middleware
 app.use(cors());
-app.use(express.json()); // ✅ Needed for fetch JSON
-app.use(express.urlencoded({ extended: true })); // ✅ Optional, for form-data
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 
 // ✅ Multer for image uploads
 const storage = multer.memoryStorage();
@@ -113,6 +113,15 @@ app.post("/student/register", upload.single("image"), async (req, res) => {
       return res.json({ message: "all fields are required", success: false });
     }
 
+    // ✅ Check if phone already exists
+    const exist = await Student.findOne({ phone });
+    if (exist) {
+      return res.json({
+        message: "Phone number already registered",
+        success: false,
+      });
+    }
+
     // Upload image to Cloudinary
     const stream = cloudinary.uploader.upload_stream(
       { folder: "students" },
@@ -122,17 +131,29 @@ app.post("/student/register", upload.single("image"), async (req, res) => {
           return res.json({ success: false, message: "Image upload failed" });
         }
 
-        const nextId = await getNextUserId();
-        const newUser = new Student({
-          userId: nextId,
-          name,
-          phone,
-          stdClass,
-          imgUrl: result.secure_url,
-        });
+        try {
+          const nextId = await getNextUserId();
+          const newUser = new Student({
+            userId: nextId,
+            name,
+            phone,
+            stdClass,
+            imgUrl: result.secure_url,
+          });
 
-        await newUser.save();
-        res.json({ success: true, userId: newUser.userId, user: newUser });
+          await newUser.save();
+          res.json({ success: true, userId: newUser.userId, user: newUser });
+        } catch (dbErr) {
+          // ✅ Catch duplicate key error (unique constraint)
+          if (dbErr.code === 11000) {
+            return res.json({
+              success: false,
+              message: "Phone number already registered",
+            });
+          }
+          console.log(dbErr);
+          res.json({ success: false, message: "registration failed" });
+        }
       }
     );
 
